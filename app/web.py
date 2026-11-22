@@ -326,11 +326,13 @@ def save_settings():
         'end': f.get('end', '10:00'),
         'days': [i for i in range(7) if f'day{i}' in f],
     }
+    unit = f.get('temp_unit', cfg['weather'].get('unit', 'celsius'))
     cfg['weather'] = {
         'enabled': 'weather_enabled' in f,
         'name': f.get('weather_name', '').strip(),
         'lat': float(f['lat']) if f.get('lat') else None,
         'lon': float(f['lon']) if f.get('lon') else None,
+        'unit': unit if unit in config.TEMP_UNITS else 'celsius',
     }
     cfg['holidays'] = {'country': f.get('hol_country', '').strip().upper(), 'subdiv': f.get('hol_subdiv', '').strip().upper()}
     cfg['dim_past_events'] = 'dim_past_events' in f

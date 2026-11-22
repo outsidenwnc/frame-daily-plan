@@ -1,4 +1,6 @@
 import datetime
+import io
+import json
 import os
 import zoneinfo
 
@@ -44,6 +46,27 @@ def test_holidays_in_plan_language():
     assert de[0]['start'] == 'Feiertag' and 'Weihnacht' in de[0]['title']
 
 
+def fake_forecast(monkeypatch, tmax, tmin, code=2, rain=10):
+    body = json.dumps({'daily': {'weather_code': [code], 'temperature_2m_max': [tmax],
+                                 'temperature_2m_min': [tmin], 'precipitation_probability_max': [rain]}})
+    monkeypatch.setattr(plan_data.urllib.request, 'urlopen', lambda *a, **k: io.StringIO(body))
+
+
+def test_weather_celsius_is_default(monkeypatch):
+    fake_forecast(monkeypatch, 19.4, 11.6)
+    cfg = dict(CFG, weather={'enabled': True, 'lat': 1, 'lon': 2})
+    wx = plan_data.weather(cfg, datetime.date(2026, 10, 27), plan_data.WORDS['en'])
+    assert (wx['max'], wx['min'], wx['unit']) == (19, 12, 'C')
+
+
+def test_weather_fahrenheit_keeps_celsius_hints(monkeypatch):
+    fake_forecast(monkeypatch, 10.0, 2.0)  # 50 °F / 36 °F: still "cold" by the °C thresholds
+    cfg = dict(CFG, weather={'enabled': True, 'lat': 1, 'lon': 2, 'unit': 'fahrenheit'})
+    wx = plan_data.weather(cfg, datetime.date(2026, 10, 27), plan_data.WORDS['en'])
+    assert (wx['max'], wx['min'], wx['unit']) == (50, 36, 'F')
+    assert wx['hint'] == plan_data.WORDS['en']['hint_cold']
+
+
 def test_schedule_rules():
     d = lambda h, m=0, day=27: datetime.datetime(2026, 10, day, h, m, tzinfo=TZ)  # 27th = Tuesday
     today = '2026-10-27'
@@ -63,6 +86,14 @@ def test_render_both_languages(tmp_path):
         out = tmp_path / f'demo-{lang}.jpg'
         render.render(plan_data.demo(CFG, now, lang), str(out))
         assert Image.open(out).size == (3840, 2160)
+
+
+def test_render_in_fahrenheit(tmp_path):
+    now = datetime.datetime(2026, 10, 27, 8, 0, tzinfo=TZ)
+    data = plan_data.demo(dict(CFG, weather={'unit': 'fahrenheit'}), now, 'en')
+    assert (data['weather']['max'], data['weather']['min'], data['weather']['unit']) == (66, 54, 'F')
+    render.render(data, str(tmp_path / 'f.jpg'))
+    assert render.degrees(66, 'F') == '66°F' and render.degrees(19, None) == '19°'
 
 
 def test_text_and_fit(tmp_path):
