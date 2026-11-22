@@ -1,6 +1,6 @@
 # samsungframetv (NickWaterton's Art Mode library, formerly installed as samsungtvws), release 4.1.4.
 # 4.1.x fixes uploads and thumbnails on 2022+ Frames (wait before the secured transfer socket).
-samsungframetv @ https://github.com/NickWaterton/samsung-tv-ws-api/archive/66a4d5bceb85e228dd3b6d15697ac1ae960f84f3.zip
+samsungframetv @ https://github.com/NickWaterton/samsung-tv-ws-api/archive/3d70a9cc3758858ee2dcec4df8e81d714cb67f50.zip
 requests==2.32.5
 pillow==11.3.0
 icalendar==6.3.1
