@@ -8,6 +8,7 @@ fallback. Each call tries the library first and falls back to the binary way.
 import collections
 import concurrent.futures
 import ipaddress
+import itertools
 import json
 import os
 import socket
@@ -51,8 +52,11 @@ _art.SamsungTVArt.open = _art_open
 # The last messages the TV sent on the art channel, for the diagnostics. Each recv has a
 # timeout, but a TV that keeps sending messages other than the expected reply keeps the
 # library waiting forever, so this shows what it was sending.
+# Each art connection gets a letter (A, B, ...), so messages from two connections at the
+# same time can be told apart.
 events = collections.deque(maxlen=20)
 _art_event = _art.SamsungTVArt._websocket_event
+_connections = itertools.count()
 
 
 def _record_event(self, event, response):
@@ -63,7 +67,9 @@ def _record_event(self, event, response):
         except ValueError:
             pass
     detail = data.get('event') or data.get('request') if isinstance(data, dict) else None
-    events.append(f"{time.strftime('%H:%M:%S')} {event}{' / ' + str(detail) if detail else ''}")
+    if not hasattr(self, '_diag_label'):
+        self._diag_label = chr(ord('A') + next(_connections) % 26)
+    events.append(f"{time.strftime('%H:%M:%S')} [{self._diag_label}] {event}{' / ' + str(detail) if detail else ''}")
     _art_event(self, event, response)
 
 
