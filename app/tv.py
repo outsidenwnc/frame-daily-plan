@@ -5,11 +5,13 @@ e.g. a 2022 LS03B) and detect old ones itself. Old Frames (e.g. 2017, Art API 1.
 also take one binary WebSocket frame, as the SmartThings app does; that is kept as a
 fallback. Each call tries the library first and falls back to the binary way.
 """
+import collections
 import concurrent.futures
 import ipaddress
 import json
 import os
 import socket
+import threading
 import time
 import uuid
 
@@ -45,6 +47,57 @@ def _art_open(self):
 
 
 _art.SamsungTVArt.open = _art_open
+
+# The last messages the TV sent on the art channel, for the diagnostics. Each recv has a
+# timeout, but a TV that keeps sending messages other than the expected reply keeps the
+# library waiting forever, so this shows what it was sending.
+events = collections.deque(maxlen=20)
+_art_event = _art.SamsungTVArt._websocket_event
+
+
+def _record_event(self, event, response):
+    data = response.get('data')
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            pass
+    detail = data.get('event') or data.get('request') if isinstance(data, dict) else None
+    events.append(f"{time.strftime('%H:%M:%S')} {event}{' / ' + str(detail) if detail else ''}")
+    _art_event(self, event, response)
+
+
+_art.SamsungTVArt._websocket_event = _record_event
+
+# Hard limit for one conversation with the TV. Without it a stuck request keeps one of the
+# web server's few threads forever, and after a few the whole web page stops answering.
+LIMIT = 60
+
+
+def _bounded(fn, opened, seconds=LIMIT):
+    """Run fn(opened) in a thread; if it takes longer than `seconds`, close every
+    connection fn put in `opened` (which ends a blocked recv) and raise TimeoutError."""
+    result = {}
+
+    def run():
+        try:
+            result['value'] = fn(opened)
+        except BaseException as e:  # noqa: BLE001  handed to the caller
+            result['error'] = e
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        for c in opened:
+            try:
+                c.close()
+            except Exception:  # noqa: BLE001
+                pass
+        raise TimeoutError(f'the TV did not finish answering within {seconds} s')
+    if 'error' in result:
+        raise result['error']
+    return result['value']
 
 
 def _tv(ip, timeout):
@@ -132,21 +185,37 @@ def get_thumbnail(a, content_id):
 
 
 def status(ip):
-    a = connect(ip)
-    return {'art_mode': a.get_artmode(), 'current': (a.get_current() or {}).get('content_id')}
+    def work(opened):
+        a = connect(ip)
+        opened.append(a)
+        try:
+            return {'art_mode': a.get_artmode(), 'current': (a.get_current() or {}).get('content_id')}
+        finally:
+            a.close()
+    return _bounded(work, [])
 
 
 def diagnose(ip):
     """Step by step, to see where a connection fails."""
-    import time
     steps = []
     tv = _tv(ip, 120)
-    for name, fn in (('rest', lambda: tv.rest_device_info()['device'].get('PowerState', 'ok')),
-                     ('remote', lambda: (tv.open(), tv.close(), 'ok')[2]),
-                     ('art', lambda: tv.art(timeout=30).get_artmode())):
+    events.clear()
+
+    def art(opened):
+        a = tv.art(timeout=30)
+        opened.append(a)
+        try:
+            return a.get_artmode()
+        finally:
+            a.close()
+
+    # the remote step may wait up to two minutes for someone to press Allow on the TV
+    for name, limit, fn in (('rest', 30, lambda opened: tv.rest_device_info()['device'].get('PowerState', 'ok')),
+                            ('remote', 150, lambda opened: (opened.append(tv), tv.open(), tv.close(), 'ok')[3]),
+                            ('art', LIMIT, art)):
         t = time.time()
         try:
-            steps.append((name, 'ok', str(fn())[:80], round(time.time() - t, 1)))
+            steps.append((name, 'ok', str(_bounded(fn, [], limit))[:80], round(time.time() - t, 1)))
         except Exception as e:  # noqa: BLE001
             steps.append((name, 'FAIL', f'{type(e).__name__}: {e}'[:200], round(time.time() - t, 1)))
             break
