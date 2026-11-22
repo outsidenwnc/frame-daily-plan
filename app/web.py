@@ -121,24 +121,36 @@ def health():
 @protected
 def status():
     cfg = config.load()
+    # One conversation with the TV at a time: several art connections at once confuse
+    # the Frame. If the TV is busy (plan upload, Connect, diagnostics), don't wait for it.
+    if not jobs.lock.acquire(timeout=5):
+        return {'ok': False, 'error': 'busy'}
     try:
         s = tv.status(cfg['tv_ip'])
         return {'ok': True, **s}
     except Exception as e:  # noqa: BLE001
         return {'ok': False, 'error': str(e)}
+    finally:
+        jobs.lock.release()
 
 
 @app.get('/diag')
 @protected
 def diag():
-    return {'steps': tv.diagnose(config.load()['tv_ip']), 'art_events': list(tv.events)}
+    if not jobs.lock.acquire(timeout=5):
+        return {'error': 'busy: the app is talking to the TV, try again in a minute'}
+    try:
+        return {'steps': tv.diagnose(config.load()['tv_ip']), 'art_events': list(tv.events)}
+    finally:
+        jobs.lock.release()
 
 
 @app.post('/pair')
 @protected
 def pair():
     # Triggers the TV's "allow this device?" prompt and waits up to two minutes for it.
-    steps = tv.diagnose(config.load()['tv_ip'])
+    with jobs.lock:
+        steps = tv.diagnose(config.load()['tv_ip'])
     t = ui()
     text = ' · '.join(f"{t['step_' + n]}: {'ok' if r == 'ok' else t['error'] + ' (' + d + ')'}" for n, r, d, _ in steps)
     ok = len(steps) == 3 and all(r == 'ok' for _, r, _, _ in steps)
