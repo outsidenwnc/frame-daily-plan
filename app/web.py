@@ -131,7 +131,7 @@ def status():
 @app.get('/diag')
 @protected
 def diag():
-    return {'steps': tv.diagnose(config.load()['tv_ip'])}
+    return {'steps': tv.diagnose(config.load()['tv_ip']), 'art_events': list(tv.events)}
 
 
 @app.post('/pair')
@@ -145,6 +145,8 @@ def pair():
     if ok:
         open(os.path.join(config.DATA, 'paired'), 'w').close()
     jobs.log(f'Connect: {text}')
+    if not ok and tv.events:
+        jobs.log('Art channel messages: ' + ' | '.join(tv.events))
     return redirect(url_for('index', msg=f"{t['connected'] if ok else t['not_connected']} – {text}"))
 
 
