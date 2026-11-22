@@ -88,7 +88,7 @@ def wake_on_lan():
 def art_mode(ip):
     """'on', 'off', or None if the TV does not say."""
     try:
-        return tv._tv(ip, 10).art().get_artmode()
+        return tv._tv(ip, 10).art(timeout=10).get_artmode()
     except Exception:  # noqa: BLE001
         return None
 
