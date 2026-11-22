@@ -59,7 +59,9 @@ def connect(ip):
     auth = _tv(ip, 120)
     auth.open()
     auth.close()
-    return _tv(ip, 30).art()
+    # art() doesn't inherit the TV's timeout and defaults to 5 s, which is too short for
+    # Frames that take a while to answer on the art channel.
+    return _tv(ip, 30).art(timeout=30)
 
 
 def _send_image_binary(a, data, matte, timeout=15):
@@ -141,7 +143,7 @@ def diagnose(ip):
     tv = _tv(ip, 120)
     for name, fn in (('rest', lambda: tv.rest_device_info()['device'].get('PowerState', 'ok')),
                      ('remote', lambda: (tv.open(), tv.close(), 'ok')[2]),
-                     ('art', lambda: tv.art().get_artmode())):
+                     ('art', lambda: tv.art(timeout=30).get_artmode())):
         t = time.time()
         try:
             steps.append((name, 'ok', str(fn())[:80], round(time.time() - t, 1)))
