@@ -39,7 +39,7 @@ Art Mode is quiet, ad-free and always on the wall, so it's a good place for a fa
 
 ## Requirements
 
-- **A Samsung The Frame** on your home network. It has been tested on a 2017 model (UE55LS003, Art API 1.07). Newer models should work, because the app falls back to the standard upload method, but they are untested. Please report your model (see Compatibility below).
+- **A Samsung The Frame** on your home network. It has been tested on a 2017 model (UE55LS003, Art API 1.07) and a 2022 model (QN75LS03B). Other models should work, because the app falls back to the standard upload method, but they are untested. Please report your model (see Compatibility below).
 - **An always-on machine that runs Docker**, on the same network as the TV: for example a Synology NAS with Container Manager, a Raspberry Pi, or any Linux server. Images are built for `amd64` and `arm64`.
 - **Calendar links in iCal format.** Google Calendar: *Settings → your calendar → "Secret address in iCal format"*.
 - No Samsung account, no SmartThings, no cloud service. Internet access is only needed for the calendars and the weather.
@@ -135,13 +135,26 @@ The web page shows your private calendar links. Keep it inside your home network
 - **Apple TV: "The PIN expired".** The Apple TV closes the PIN screen after about 30 seconds. Click **Pair** again and type the new PIN straight away.
 - **Apple TV: the Frame stays dark after the Apple TV goes to sleep.** With "Control TVs and Receivers" on, the Frame comes back only through Wake-on-LAN: it needs a network cable, and the app must have reached the TV once while it was on. The log at the bottom of the page says what happened.
 - **New calendar entries don't show up.** Google updates secret iCal feeds with a delay, sometimes up to a few hours.
+- **"Connect" fails at the Art Mode step, or the page stays on "Checking the TV …".** Open `http://<host>:8765/diag` in a new tab. If `rest` and `remote` are `ok` but `art` fails, and `art_events` shows `ms.channel.connect` with no `ms.channel.ready` after it, the TV's Art Mode service is stuck (seen on a 2022 Frame). Unplug the TV for a full minute and plug it back in; turning it off with the remote only puts it in standby, which doesn't reset Art Mode. Also check that nothing else, such as SmartThings automations or Home Assistant, is using the Frame's Art Mode at the same time.
 - **The log** is at the bottom of the web page and in `data/frame-daily-plan.log`.
+
+### Fixed: crash and Art Mode hangs after the samsungframetv 4.1.4 update
+
+The Samsung library was renamed from `samsungtvws` to `samsungframetv` in 4.1.x. Updating to 4.1.4 caused these problems on a 2022 Frame (QN75LS03B), all fixed:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Container exits on start with `NameError: name '_art' is not defined` | The `samsungtvws` imports in `tv.py` were commented out, but they are still needed | Import `art`, `helper`, `exceptions` and `SamsungTVWSConnection` from `samsungframetv` (#3) |
+| Connect: `Art Mode: error (WebSocketTimeoutException: Connection timed out)` after 5 s | `art()` doesn't inherit the TV's timeout and defaults to 5 s | Pass 30 s (10 s for the Apple TV check) to `art()` (#4) |
+| Page stuck on "Checking the TV …", `/diag` and the log stop answering | The library waits for an art reply with no overall limit; a few stuck `/status` calls used up all 4 web server threads | Hard time limits on TV calls, which close the connection when they run out; `/diag` shows the last art-channel messages as `art_events` (#5) |
+| `/diag` shows `ms.channel.connect` but never `ms.channel.ready` | The TV's Art Mode service was stuck. The page's status check also opened a second art connection while diagnostics ran | `/status`, `/diag` and Connect take turns with one TV conversation at a time, and the Apple TV check closes its connection (#6). Unplugging the TV for a minute cleared the stuck Art Mode |
 
 ## Compatibility
 
 | Model | Year | Art API | Status |
 | --- | --- | --- | --- |
 | UE55LS003 | 2017 | 1.07 | ✅ works |
+| QN75LS03B | 2022 | – | ✅ works (with samsungframetv 4.1.4; see Troubleshooting if Art Mode doesn't answer) |
 
 Tried another Frame? Please open an issue with the model, year and whether it worked.
 
@@ -155,6 +168,6 @@ FRAME_PLAN_DATA=./data .venv/bin/python app/web.py   # http://localhost:8765
 
 ## Credits and licence
 
-MIT, see `LICENSE`. Third-party parts and their licences are listed in `THIRD_PARTY_NOTICES.md`; the Samsung connection uses [samsungtvws](https://github.com/NickWaterton/samsung-tv-ws-api) (LGPL-3.0). Weather data is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
+MIT, see `LICENSE`. Third-party parts and their licences are listed in `THIRD_PARTY_NOTICES.md`; the Samsung connection uses [samsungframetv](https://github.com/NickWaterton/samsung-tv-ws-api), formerly samsungtvws (LGPL-3.0). Weather data is by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
 
 Not affiliated with or endorsed by Samsung. "Samsung", "The Frame" and "SmartThings" are trademarks of Samsung Electronics.
