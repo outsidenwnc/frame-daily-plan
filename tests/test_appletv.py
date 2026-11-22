@@ -197,8 +197,8 @@ def test_cec_setting_saved():
 def test_art_channel_skips_client_connect_notice(monkeypatch):
     import json
     import tv
-    from samsungtvws import art
-    from samsungtvws.connection import SamsungTVWSConnection
+    from samsungframetv import art
+    from samsungframetv.connection import SamsungTVWSConnection
 
     class Sock:
         msgs = [json.dumps({'event': 'ms.channel.clientConnect', 'data': {'attributes': {'token': '1'}}}),
