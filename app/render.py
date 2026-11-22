@@ -27,14 +27,14 @@ LABELS = {
                       'Oktober', 'November', 'Dezember'],
            'initials': 'MDMDFSS', 'today': 'Heute', 'tomorrow': 'Morgen', 'todos': 'Zu erledigen',
            'no_todos': 'Nichts zu erledigen', 'no_events': 'Keine Termine', 'more': '… und weitere',
-           'past': 'vorbei', 'night': 'bis {}° in der Nacht', 'all_day': 'Ganztägig',
+           'past': 'vorbei', 'night': 'bis {} in der Nacht', 'all_day': 'Ganztägig',
            'date': '{day}. {month}'},
     'en': {'weekdays': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
            'months': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
                       'October', 'November', 'December'],
            'initials': 'MTWTFSS', 'today': 'Today', 'tomorrow': 'Tomorrow', 'todos': 'To do',
            'no_todos': 'Nothing to do', 'no_events': 'No events', 'more': '… and more',
-           'past': 'done', 'night': 'down to {}° tonight', 'all_day': 'All day',
+           'past': 'done', 'night': 'down to {} tonight', 'all_day': 'All day',
            'date': '{month} {day}'},
 }
 L = LABELS['de']  # set per render
@@ -142,6 +142,11 @@ def month(d, date, x, y, w):
         y += 86
 
 
+def degrees(value, unit):
+    """19 -> '19°C' / '66°F'; plain '19°' for plans made before the unit setting existed."""
+    return f'{value}°{unit or ""}'
+
+
 def render(day, out, background_path=None):
     global L
     L = LABELS.get(day.get('lang', 'de'), LABELS['de'])
@@ -192,8 +197,8 @@ def render(day, out, background_path=None):
         ImageDraw.Draw(icon).text((0, 0), wx['icon'], font=ef, embedded_color=True)
         icon = icon.resize((230, 230), Image.LANCZOS)
         im.alpha_composite(icon, (c3[0] + 70, M + 70))
-        d.text((c3[0] + 340, M + 70), f"{wx['max']}°", font=font(150, 'DemiBold'), fill=CREAM)
-        d.text((c3[0] + 340, M + 250), L['night'].format(wx['min']), font=font(58, 'Medium'), fill=SOFT)
+        d.text((c3[0] + 340, M + 70), degrees(wx['max'], wx.get('unit')), font=font(150, 'DemiBold'), fill=CREAM)
+        d.text((c3[0] + 340, M + 250), L['night'].format(degrees(wx['min'], wx.get('unit'))), font=font(58, 'Medium'), fill=SOFT)
         d.text((c3[0] + 70, M + 380), wx['text'], font=font(66, 'Medium'), fill=CREAM)
         if wx.get('hint'):
             d.text((c3[0] + 70, M + 480), wx['hint'], font=font(66, 'DemiBold'), fill=ORANGE)

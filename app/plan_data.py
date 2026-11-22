@@ -39,6 +39,16 @@ def words(cfg):
     return WORDS.get(cfg.get('plan_lang', 'en'), WORDS['en'])
 
 
+def temp_unit(cfg):
+    """The temperature scale chosen in the settings: 'celsius' (default) or 'fahrenheit'."""
+    return 'fahrenheit' if (cfg.get('weather') or {}).get('unit') == 'fahrenheit' else 'celsius'
+
+
+def show_temp(celsius, unit):
+    """A °C value as a whole number on the chosen scale."""
+    return round(celsius * 9 / 5 + 32) if unit == 'fahrenheit' else round(celsius)
+
+
 def nice_title(title):
     return ' '.join(title.split())
 
@@ -96,6 +106,7 @@ def holiday_entries(cfg, day, w):
 
 def weather(cfg, day, w):
     loc = cfg['weather']
+    # Always fetched in °C: the clothing hints below use °C thresholds. Converted only for display.
     url = 'https://api.open-meteo.com/v1/forecast?' + urllib.parse.urlencode({
         'latitude': loc['lat'], 'longitude': loc['lon'], 'timezone': cfg['timezone'],
         'daily': 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
@@ -117,7 +128,9 @@ def weather(cfg, day, w):
         hint = None
     if 30 <= rain < 50:
         text += f", {rain} % {w['rain']}"
-    return {'icon': icon, 'max': round(tmax), 'min': round(tmin), 'text': text, 'hint': hint}
+    unit = temp_unit(cfg)
+    return {'icon': icon, 'max': show_temp(tmax, unit), 'min': show_temp(tmin, unit),
+            'unit': 'F' if unit == 'fahrenheit' else 'C', 'text': text, 'hint': hint}
 
 
 def build(cfg, now):
@@ -219,6 +232,9 @@ def demo(cfg, now, lang='en'):
                 past = bool(cfg.get('dim_past_events')) and (now.hour, now.minute) >= (h, m)
             out.append({'start': start, 'end': end, 'title': title, 'color': color, 'past': past})
         return out
+    unit = temp_unit(cfg)
+    wx = dict(d['weather'], max=show_temp(d['weather']['max'], unit), min=show_temp(d['weather']['min'], unit),
+              unit='F' if unit == 'fahrenheit' else 'C')
     return {'date': now.date().isoformat(), 'lang': lang, 'today': entries(d['today'], True),
-            'tomorrow': entries(d['tomorrow'], False), 'todos': d['todos'], 'weather': dict(d['weather']),
+            'tomorrow': entries(d['tomorrow'], False), 'todos': d['todos'], 'weather': wx,
             'errors': []}

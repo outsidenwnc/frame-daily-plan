@@ -13,7 +13,8 @@ DEFAULTS = {
     'plan_lang': 'en',
     # role "events" shows entries as appointments, "todos" puts every entry on the to-do list
     'calendars': [],
-    'weather': {'enabled': True, 'name': '', 'lat': None, 'lon': None},
+    # unit: "celsius" or "fahrenheit", only for the temperatures shown on the plan
+    'weather': {'enabled': True, 'name': '', 'lat': None, 'lon': None, 'unit': 'celsius'},
     'holidays': {'country': '', 'subdiv': ''},
     'schedule': {'enabled': True, 'start': '07:00', 'end': '10:00', 'days': [0, 1, 2, 3, 4, 5, 6]},
     'dim_past_events': True,
@@ -26,6 +27,7 @@ DEFAULTS = {
 }
 
 COLORS = ['green', 'blue', 'orange', 'red', 'grey']
+TEMP_UNITS = ['celsius', 'fahrenheit']
 
 
 def load():

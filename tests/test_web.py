@@ -36,3 +36,17 @@ def test_bad_timezone_is_ignored():
     c = client()
     c.post('/set-place', data={'label': 'X', 'lat': '1', 'lon': '2', 'timezone': 'Not/AZone', 'country_code': ''})
     assert config.load()['timezone'] != 'Not/AZone'
+
+
+def test_temperature_unit_setting():
+    c = client()
+    assert 'name="temp_unit" value="fahrenheit"' in c.get('/').get_data(as_text=True)
+    form = {'tv_ip': '', 'timezone': 'America/New_York', 'start': '07:00', 'end': '10:00', 'weather_enabled': 'on',
+            'temp_unit': 'fahrenheit', 'cal_count': '0'}
+    c.post('/settings', data=form)
+    assert config.load()['weather']['unit'] == 'fahrenheit'
+    assert 'value="fahrenheit" checked' in c.get('/').get_data(as_text=True)
+    c.post('/set-place', data={'label': 'Boston', 'lat': '42.36', 'lon': '-71.06', 'timezone': 'America/New_York'})
+    assert config.load()['weather']['unit'] == 'fahrenheit'  # picking a place keeps the scale
+    c.post('/settings', data=dict(form, temp_unit='kelvin'))
+    assert config.load()['weather']['unit'] == 'celsius'      # unknown values fall back to Celsius
